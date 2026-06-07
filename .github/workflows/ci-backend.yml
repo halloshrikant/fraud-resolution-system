@@ -1,0 +1,149 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - 'agents/**'
+      - 'ingestion/**'
+      - '.github/workflows/ci-backend.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - 'agents/**'
+      - 'ingestion/**'
+
+jobs:
+  test:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis/redis-stack:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Install dependencies
+      run: |
+        cd backend
+        uv venv
+        source .venv/bin/activate
+        uv pip install -e ".[dev]"
+        cd ../agents && uv pip install -e .
+        cd ../ingestion && uv pip install -e .
+
+    - name: Run linting
+      run: |
+        cd backend
+        source .venv/bin/activate
+        ruff check . || true
+        black --check . || true
+
+    - name: Run type checking
+      run: |
+        cd backend
+        source .venv/bin/activate
+        mypy app || true
+
+    - name: Run tests
+      env:
+        DEV_MODE: "True"
+        REDIS_HOST: localhost
+        REDIS_TLS_PORT: "6379"
+        AWS_REGION: us-east-1
+        COGNITO_USER_POOL_ID: test-pool
+        COGNITO_CLIENT_ID: test-client
+        MLFLOW_TRACKING_URI: sqlite:///mlflow.db
+        ALLOWED_ORIGINS: '["http://localhost:5173"]'
+      run: |
+        cd backend
+        source .venv/bin/activate
+        python ../test_agents.py
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: |
+          backend/htmlcov/
+          backend/.coverage
+
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/fraud-resolution-backend:latest
+          ${{ secrets.DOCKER_USERNAME }}/fraud-resolution-backend:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --name fraud-resolution-prod --region us-east-1
+
+    - name: Deploy to EKS
+      run: |
+        kubectl set image deployment/backend backend=${{ secrets.DOCKER_USERNAME }}/fraud-resolution-backend:${{ github.sha }} -n fraud-system
+        kubectl rollout status deployment/backend -n fraud-system

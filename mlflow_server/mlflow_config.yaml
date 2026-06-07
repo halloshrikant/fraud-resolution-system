@@ -1,0 +1,6 @@
+# mlflow_server/mlflow_config.yaml
+default_artifact_root: "s3://fraud-system-mlflow-artifacts/runs"
+backend_store_uri:     "sqlite:///mlflow.db"   # Replace with RDS PostgreSQL in production
+host: "0.0.0.0"
+port: 5000
+workers: 2

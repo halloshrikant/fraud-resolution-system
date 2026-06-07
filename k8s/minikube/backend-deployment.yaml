@@ -1,0 +1,107 @@
+---
+# Backend API Deployment for Minikube
+# Minimal resource allocation for local development
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: fraud-system
+  labels:
+    app: backend
+    component: api
+spec:
+  replicas: 1  # Single replica for minikube
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: fraud-resolution-backend:latest
+        imagePullPolicy: Never  # Use local image in minikube
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Load configuration from ConfigMap
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: fraud-config
+              key: REDIS_HOST
+        - name: REDIS_TLS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: fraud-config
+              key: REDIS_TLS_PORT
+        - name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: fraud-config
+              key: AWS_REGION
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            configMapKeyRef:
+              name: fraud-config
+              key: MLFLOW_TRACKING_URI
+        - name: ALLOWED_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: fraud-config
+              key: ALLOWED_ORIGINS
+        - name: DEV_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: fraud-config
+              key: DEV_MODE
+        # Load secrets
+        - name: COGNITO_USER_POOL_ID
+          valueFrom:
+            secretKeyRef:
+              name: fraud-secrets
+              key: COGNITO_USER_POOL_ID
+        - name: COGNITO_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: fraud-secrets
+              key: COGNITO_CLIENT_ID
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+---
+# Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: fraud-system
+spec:
+  type: NodePort  # Use NodePort for minikube
+  selector:
+    app: backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+    nodePort: 30800  # Fixed port for easy access
+    name: http

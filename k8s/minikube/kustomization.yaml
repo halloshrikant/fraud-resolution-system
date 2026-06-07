@@ -1,0 +1,30 @@
+---
+# Kustomization for Minikube environment
+# Combines base resources with minikube-specific overlays
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: fraud-system
+
+# Base resources
+resources:
+  - ../base/namespace.yaml
+  - ../base/configmap.yaml
+  - ../base/secrets.yaml
+  - backend-deployment.yaml
+  - redis-deployment.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  environment: minikube
+  managed-by: kustomize
+
+# ConfigMap patches for minikube
+patches:
+  - patch: |-
+      - op: replace
+        path: /data/DEV_MODE
+        value: "True"
+    target:
+      kind: ConfigMap
+      name: fraud-config

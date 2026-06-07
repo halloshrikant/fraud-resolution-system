@@ -1,0 +1,23 @@
+[project]
+name = "fraud-resolution-backend"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "gunicorn>=23",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "redis[hiredis]>=5.2",
+    "redis-om>=0.3",
+    "python-jose[cryptography]>=3.3",
+    "httpx>=0.27",
+    "boto3>=1.35",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "httpx>=0.27"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

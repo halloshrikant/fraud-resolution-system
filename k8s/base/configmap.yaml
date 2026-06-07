@@ -1,0 +1,24 @@
+---
+# ConfigMap for non-sensitive configuration
+# Environment-specific values are overridden in overlays
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fraud-config
+  namespace: fraud-system
+data:
+  # Redis configuration
+  REDIS_HOST: "redis-service"
+  REDIS_TLS_PORT: "6379"
+  
+  # AWS Region
+  AWS_REGION: "us-east-1"
+  
+  # MLflow tracking (local SQLite for dev, k8s service for prod)
+  MLFLOW_TRACKING_URI: "sqlite:///mlflow.db"
+  
+  # CORS origins (comma-separated)
+  ALLOWED_ORIGINS: '["http://localhost:5173","https://fraud.example.com"]'
+  
+  # Development mode (set to "False" in production)
+  DEV_MODE: "True"

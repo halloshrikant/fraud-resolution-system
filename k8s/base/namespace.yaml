@@ -1,0 +1,10 @@
+---
+# Namespace for fraud resolution system
+# Isolates all fraud detection resources from other workloads
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fraud-system
+  labels:
+    app: fraud-resolution
+    environment: production

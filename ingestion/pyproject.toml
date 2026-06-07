@@ -1,0 +1,14 @@
+    [project]
+name = "fraud-ingestion-pipeline"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.35",
+    "redis[hiredis]>=5.2",
+    "unstructured[pdf,docx]>=0.16",
+    "unstructured-client>=0.26",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

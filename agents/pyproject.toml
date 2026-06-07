@@ -1,0 +1,22 @@
+[project]
+name = "fraud-resolution-agents"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "openai-agents>=0.0.9",             # OpenAI Agents SDK
+    "litellm>=1.52",                    # Multi-model abstraction
+    "boto3>=1.35",                      # AWS SDK (Bedrock + S3)
+    "redis[hiredis]>=5.2",
+    "mlflow>=2.17",
+    "pydantic>=2.9",
+    "unstructured[pdf,docx]>=0.16",    # Unstructured.io
+    "unstructured-client>=0.26",        # Unstructured.io hosted API
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fraud_agents*"]

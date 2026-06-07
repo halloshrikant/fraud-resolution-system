@@ -1,0 +1,124 @@
+---
+# Backend API Deployment for EKS
+# Production configuration with auto-scaling and persistent storage
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: fraud-system
+  labels:
+    app: backend
+    component: api
+spec:
+  replicas: 2  # Start with 2 replicas for HA
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+      annotations:
+        # IAM role for Bedrock access
+        iam.amazonaws.com/role: fraud-resolution-backend-role
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+      - name: backend
+        image: <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/fraud-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Load from ConfigMap
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: fraud-config
+              key: REDIS_HOST
+        - name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: fraud-config
+              key: AWS_REGION
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow.fraud-system.svc.cluster.local:5000"
+        - name: DEV_MODE
+          value: "False"  # Production mode
+        # Load from Secrets
+        - name: COGNITO_USER_POOL_ID
+          valueFrom:
+            secretKeyRef:
+              name: fraud-secrets
+              key: COGNITO_USER_POOL_ID
+        - name: COGNITO_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: fraud-secrets
+              key: COGNITO_CLIENT_ID
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+---
+# Backend Service (LoadBalancer for EKS)
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: fraud-system
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  selector:
+    app: backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: fraud-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

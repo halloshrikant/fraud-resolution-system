@@ -1,0 +1,30 @@
+---
+# Kustomization for EKS production environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: fraud-system
+
+resources:
+  - ../base/namespace.yaml
+  - ../base/configmap.yaml
+  - ../base/secrets.yaml
+  - backend-deployment.yaml
+
+commonLabels:
+  environment: production
+  managed-by: kustomize
+  cloud-provider: aws
+
+# Production-specific patches
+patches:
+  - patch: |-
+      - op: replace
+        path: /data/DEV_MODE
+        value: "False"
+      - op: replace
+        path: /data/MLFLOW_TRACKING_URI
+        value: "http://mlflow.fraud-system.svc.cluster.local:5000"
+    target:
+      kind: ConfigMap
+      name: fraud-config
